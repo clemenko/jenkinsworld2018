@@ -1,42 +1,23 @@
-# Secure, Automated Software Supply Chain - Dockercon 2018
+# Secure, Automated Software Supply Chain
 
-In this lab you will integrate Docker Enterpise Edition Advanced in to your development pipeline. You will build your application from a Dockerfile and push your image to the Docker Trusted Registry (DTR). DTR will scan your image for vulnerabilities so they can be fixed before your application is deployed. This helps you build more secure apps!
+Creating a Secure Supply Chain of images is vitally important. Every organization needs to weigh ALL options available and understand the security risks. Having so many options for images makes it difficult to pick the right ones. Ultimately every organization needs to know the provenance of all the images, even when trusting an upstream image from store.docker.com. Once the images are imported into the infrastructure, a vulnerability scan is vital. Docker Trusted Registry with Image Scanning gives insight into any vulnerabilities. Finally, everything needs to be automated with Jenkins to provide a succinct audit trail. 
 
+## What You Will Learn
+This reference architecture describes the components that make up a Secure Supply Chain. Topics include using Git, Jenkins, and [the Docker Store](http://store.docker.com) to feed the supply chain. All the tools listed and demonstrated within this reference architecture can be replaced with alternatives. The Secure Supply Chain can be broken into three stages:
 
-> **Difficulty**: Intermediate
+- Stage 1 is a code repository.
+- Stage 2 is Continuous Integration.
+- Stage 3 is a registry that can scan images.
 
-> **Time**: Approximately 90 minutes
+Even though there are many alternatives, this document focuses on one set:
 
-> **Tasks**:
->
-> * [Prerequisites](#prerequisites)
-> * [Introduction](#introduction)
-> * [Task 1: Accessing PWD](#task1)
->   * [Task 1.1: Set Up Environment Variables](#task1.1)
-> * [Task 2: Enable Docker Image Scanning](#task2)
-> * [Task 3: Create Jenkins User and Organization](#task3)
->   * [Task 3.1: Create Jenkins Organization](#task3.1)
->   * [Task 3.2: Create Jenkins User](#task3.2)
->   * [Task 3.3: Create Jenkins DTR Token](#task3.3)
-> * [Task 4: Create DTR Repository](#task4)
->   * [Task 4.1: Create Promotion Policy (Private to Public)](#task4.1)
-> * [Task 5: Pull / Tag / Push Docker Image ](#task5)
-> * [Task 6: Review Scan Results ](#task6)
->   * [Task 6.1: Hide Vulnerabilities ](#task6.1)
->   * [Task 6.2: Manually Promote Image ](#task6.2)
-> * [Task 7: Extend with Image Mirroring ](#task7)
-> * [Task 8: Docker Content Trust / Image Signing ](#task8)
-> * [Task 9: Automate with Jenkins ](#task9)
->   * [Task 9.1: Deploy Jenkins](#task9.1)
->   * [Task 9.2: Plumb Jenkins](#task9.2)
->   * [Task 9.3: Webhooks](#task9.3)
-> * [Conclusion](#conclusion)
+- Github (Code Stage 1)
+- Jenkins (Build Automation Stage 2)
+- Docker Trusted Registry (Scanning and Promotion Stage 3)
 
-## Document conventions
-When you encounter a phrase in between `<` and `>`  you are meant to substitute in a different value.
-We are going to leverage the power of [Play With Docker](http://play-with-docker.com).
+One motto to remember for this reference architecture is "NO human will build or deploy code headed to production!"
 
-## <a name="abbreviations"></a>Abbreviations
+## Abbreviations
 The following abbreviations are used in this document:
 
 * UCP = Universal Control Plane
@@ -44,92 +25,26 @@ The following abbreviations are used in this document:
 * DCT = Docker Content Trust
 * EE = Docker Enterprise Edition
 * CVE = Common Vulnerabilities and Exposures
-* PWD = Play With Docker
 
-## <a name="prerequisites"></a>Prerequisites
-This lab requires an instance of Docker Enterprise Edition (EE). Docker Enterprise Edition includes Docker Universal Control Plane and Docker Trusted Registry. This lab provides Docker EE.
+## Why
+There are several good reasons why you need a **Secure Supply Chain**. Creating a **Secure Supply Chain** is theoretically mandatory for production. Non-production pipelines can also take advantage of having an automated base image. When thinking about Supply Chain, a couple of key phrases come to mind:
 
-## Understanding the Play With Docker Interface
+* "NO human will build or deploy code headed to production!"
+   * It helps prevent malicious code from being snuck into approved code. It also helps prevent insider threat.
+* "Everything needs an audit trail."
+   * Being able to prove the what, when, why, and how questions makes everyone's job easier.
+* "Every supply chain needs a known good source."
+   * Would you build a house in the middle of a swamp?
 
-![](./img/pwd_screen.jpg)
+Ideally you want the shortest path for images. You want to guarantee the success of the image making it through the chain. Limiting the steps is a great way to reduce the number of moving parts. 
 
-This workshop is only available to people in a pre-arranged workshop. That may happen through a [Docker Meetup](https://events.docker.com/chapters/), a conference workshop that is being led by someone who has made these arrangements, or special arrangements between Docker and your company. The workshop leader will provide you with the URL to a workshop environment that includes [Docker Enterprise Edition](https://www.docker.com/enterprise-edition). The environment will be based on [Play with Docker](https://labs.play-with-docker.com/).
+## Before we Begin
+Before we begin we are going to assume you have already tried out [Docker Enterprise Edition - for Centos](https://store.docker.com/editions/enterprise/docker-ee-server-centos). More importantly you have setup [Docker Trusted Registry](https://docs.docker.com/ee/dtr/). Let's assume you have already set this up. 
 
-If none of these apply to you, contact your local [Docker Meetup Chapter](https://events.docker.com/chapters/) and ask if there are any scheduled workshops. In the meantime, you may be interested in the labs available through the [Play with Docker Classroom](training.play-with-docker.com).
-
-There are three main components to the Play With Docker (PWD) interface.
-
-### 1. Console Access
-Play with Docker provides access to the 3 Docker EE hosts in your Cluster. These machines are:
-
-* A Linux-based Docker EE 2.0 (UCP 3.0.1 & 17.06.2-ee11)  Manager node
-* Three Linux-based Docker EE 2.0 (17.06.2-ee11) Worker nodes
-* A Windows Server 2016-based Docker EE 17.06 Worker Node
-
-By clicking a name on the left, the console window will be connected to that node.
-
-### 2. Access to your Universal Control Plane (UCP) and Docker Trusted Registry (DTR) servers
-Additionally, the PWD screen provides you with a one-click access to the Universal Control Plane (UCP)
-web-based management interface as well as the Docker Trusted Registry (DTR) web-based management interface. Clicking on either the `UCP` or `DTR` button will bring up the respective server web interface in a new tab.
-
-### 3. Session Information
-Throughout the lab you will be asked to provide either hostnames or login credentials that are unique to your environment. These are displayed for you at the bottom of the screen.
-
-**Note:**  There are a limited number of lab connections available for the day. You can use the same session all day by simply keeping your browser connection to the PWD environment open between sessions. This will help us get as many people connected as possible, and prevent you needing to get new credentials and hostnames in every lab. However, if you do lose your connection between sessions simply go to the PWD URL again and you will be given a new session.
-
-## <a name="introduction"></a> Introduction
-This workshop is designed to demonstrate the power of Docker Secrets, Image Promotion, Scanning Engine, and Content Trust. We will walk through creating a few secrets. Deploying a stack that uses the secret. Then we will create a Docker Trusted Registry repository where we can create a promotion policy. The promotion policy leverages the output from Image Scanning result. This is the foundation of creating a Secure Supply Chain. You can read more about  secure supply chains for our [Secure Supply Chain reference architecture](https://success.docker.com/article/secure-supply-chain).
-
-## <a name="task 1"></a>Task 1: Accessing PWD
-1. Navigate in your web browser to the URL the workshop organizer provided to you.
-
-2. Fill out the form, and click `submit`. You will then be redirected to the PWD environment.
-
-	It may take a minute or so to provision out your PWD environment.
-
-### <a name="task1.1"></a>Task 1.1: Set Up Environment Variables
-We are going to use `worker3` for **ALL** our command line work. Click on `worker3` to activate the shell.
-
-![](img/pwd_screen.jpg)
-
-Now we need to setup a few variables. We need to create `DTR_URL` and `DTR_USERNAME`. But the easiest way is to clone the Workshop Repo and run script.
-
-```
-git clone https://github.com/clemenko/dc18_supply_chain.git
-```
-
-Once cloned, now we can run the `var_setup.sh` script.
-
-```
-. dc18_supply_chain/scripts/var_setup.sh
-```
-
-Now your PWD environment variables are setup. We will use the variables for some scripting.
-
-
-## <a name="task2"></a>Task 2: Enable Docker Image Scanning
-Before we create the repositories, let's start with enabling the Docker Image Scanning engine.
-
-1. From the main PWD screen click the `DTR` button on the left side of the screen
-
-	> **Note**: Because this is a lab-based install of Docker EE we are using the default self-signed certs. Because of this your browser may display a security warning. It is safe to click through this warning.
-	>
-	> In a production environment you would use certs from a trusted certificate authority and would not see this screen.
-	>
-	> ![](./img/ssl_error.png)
-
-2.  Navigate to `System`on the left pane, then `Security`.
-![](img/system_scanning.jpg)
-
-3.  Select `Enable Scanning`. In the popup leave it in `Online` mode and select `Enable`. The CVE database will start downloading. This can take a few minutes. Please be patient for it to complete.
-    ![](img/scanning_enable.jpg)
-
-**You will notice the yellow banner while DTR is downloading the CVE database. It will take some time to download.**
-
-## <a name="task3"></a>Task 3: Create Jenkins User and Organization
+## Create Jenkins User and Organization
 In order to setup our automation we need to create an organization and a user account for Jenkins. We are going to create a user named `jenkins` in the organization `ci`.
 
-### <a name="task3.1"></a>Task 3.1: Create Jenkins Organization
+### Create Jenkins Organization
 1. From the `PWD` main page click on `DTR`.
 
 ![](img/orgs_1.jpg)
@@ -144,7 +59,7 @@ Now we should see the organization named `ci`.
 
 ![](img/orgs_2.jpg)
 
-### <a name="task3.2"></a>Task 3.2: Create Jenkins User
+### Create Jenkins User
 While remaining in DTR we can create the user from here.
 
 1. Click on the organization `ci`.
@@ -157,7 +72,7 @@ Now change the permissions for the `jenkins` account to `Org Owner`.
 
 ![](img/org_admin.jpg)
 
-### <a name="task3.3"></a>Task 3.3: Create Jenkins DTR Token
+### Create Jenkins DTR Token
 Now that we have the `jenkins` user created we need to add a token for use with DTR's API.
 
 Navigate to `Users` on the left pane. Click on `jenkins`, then click the `Access Tokens` tab.
@@ -178,89 +93,41 @@ Lets add it to the `worker3` environment. Replace `<TOKEN>` with the token from 
 export DTR_TOKEN=<TOKEN>
 ```
 
-## <a name="task4"></a>Task 4: Create DTR Repository
+## Create DTR Repository
 We now need to access Docker Trusted Registry to setup two repositories.
 
 We have an easy way with a script or the hard way by using the GUI.
 
 Either way we need to create two repositories, `dc18_build` and `dc18`. `dc18_build` will be used for the private version of the image. `dc18` will be the public version once an CVE scan is complete.
 
-**Easy Way:**
-
-Since we used `git clone` to copy the repository to `worker3` for this workshop, there is a script from that will create the DTR repositories.
-
-```
-./dc18_supply_chain/scripts/create_repos.sh
-```
-
-Feel free to `cat` the file to see how we are using `curl` and the API to create the repositories.
-
-```
-[worker3] (local) root@10.20.0.38 ~
-$ cat dc18_supply_chain/scripts/create_repos.sh
-#!/bin/bash
-# requires environment variables: DTR_HOST, DTR_USERNAME and DTR_TOKEN
-
-if [ -z "$DTR_TOKEN" ]; then
-  echo " Please create a DTR_TOKEN variable before preceeding..."
-  exit
-fi
-
-curl -X POST -k -L \
-  -u $DTR_USERNAME:$DTR_TOKEN \
-  https://$DTR_URL/api/v0/repositories/ci \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "enableManifestLists": true,
-  "immutableTags": true,
-  "longDescription": "",
-  "name": "dc18",
-  "scanOnPush": true,
-  "shortDescription": "Dockercon 2018 Example - public",
-  "visibility": "public"
-}'
-
-curl -X POST -k -L \
-  -u $DTR_USERNAME:$DTR_TOKEN \
-  https://$DTR_URL/api/v0/repositories/ci \
-  -H 'Content-Type: application/json' \
-  -d '{
-  "enableManifestLists": true,
-  "immutableTags": true,
-  "longDescription": "",
-  "name": "dc18_build",
-  "scanOnPush": true,
-  "shortDescription": "Dockercon 2018 Example - private",
-  "visibility": "public"
-}'
-```
-
-**Hard Way:**
-
 1. Navigate to `Repositories` on the left menu and click `New repository`.
 2. Create that looks like `ci`/`dc18_build`. Make sure you click `Private`. Do not click `Create` yet!
 3. Click `Show advanced settings` and then click `On Push` under `SCAN ON PUSH`.  This will ensure that the CVE scan will start right after every push to this repository.  And turn on `IMMUTABILITY `. Then click `Create`.
-![](img/new_repo.jpg)
+
+   ![](img/new_repo.jpg)
 
 4. Now let's create the second repository in a similar fashion. Create a `Public` repository as `admin`/`alpine` with `SCAN ON PUSH` set to `On Push`.
 
 5. Repeat this for creating the `ci`/`dc18` `Public` repository with `SCAN ON PUSH` set to `On Push`.
 6. We should have two repositories now.
+
     ![](img/repo_list.jpg)
 
-### <a name="task4.1"></a>Task 4.1: Create Promotion Policy - Private to Public
+### Create Promotion Policy - Private to Public
 With the two repositories setup we can now define the promotion policy. The first policy we are going to create is for promoting an image that has passed a scan with zero (0) **Critical** vulnerabilities. The policy will target the `ci`/`dc_18` repository.
 
 1. Navigate to the `ci`/`dc18_build` repository. Click `Promotions` and click `New promotion policy`.
+
   ![](img/create_policy.jpg)
 
 2. In the `PROMOTE TO TARGET IF...` box select `Critical Vulnerabilities` and then check `equals`. In the box below `equals` enter the number zero (0) and click `Add`.
 3. Set the `TARGET REPOSITORY` to `ci`/`dc18` and click `Save & Apply`.
+
   ![](img/promo_policy.jpg)
 
 When we push an image to `ci`/`dc18_build` it will get scanned. Based on that scan report we could see the image moved to `ci`/`dc18`. Lets push a few images to see if it worked.
 
-## <a name="task5"></a>Task 5: Pull / Tag / Push Docker Image
+## Pull / Tag / Push Docker Image
 Lets pull, tag, and push a few images to YOUR DTR.
 
 In order to push and pull images to DTR we will need to take advantage of PWD's Console Access.
@@ -311,7 +178,7 @@ In order to push and pull images to DTR we will need to take advantage of PWD's 
 	docker push $DTR_URL/ci/dc18_build:alpine
 	```
 
-## <a name="task6"></a>Task 6: Review Scan Results
+## Review Scan Results
 Lets take a good look at the scan results from the images. Please keep in mind this will take a few minutes to complete.
 
 1. Navigate to DTR --> `Repostories` --> `ci/dc18_build` --> `Images`.
@@ -338,7 +205,7 @@ Lets take a good look at the scan results from the images. Please keep in mind t
 
     Now that we know what is in the image. We should probably act upon it.
 
-### <a name="task6.1"></a>Task 6.1: Hide Vulnerabilities
+### Hide Vulnerabilities
 If we find that they CVE is a false positive. Meaning that it might be disputed, or from OS that you are not using. If this is the case we can simply `hide` the image. This will not remove the fact that the CVE was hidden.
 
 Click `hide` for the two CVEs.
@@ -349,48 +216,8 @@ If we click back to `Images` we can now see that the image is clean.
 
 Once we have hidden some CVEs we might want to perform a manual promotion of the image.
 
-### <a name="task6.2"></a>Task 6.2: Manually Promote Image
-Manual promotions are useful for those times that you need to move an image from a `Private` repository to a `Public` one. To perform a manual promotion :
 
-1. Click on an image's details. Lets go back to `0.2`, now click `Promote`. Lets `Promote` the image to `ci`/`dc18` with a tag of `promoted`.
-
-     ![](img/promote.jpg)
-
-2. Click `Promote`.
-    Lets look at the promoted image.
-
-3. Navigate to `ci`/`dc18` --> `Images`. Notice the `PROMOTED` badge next to the TAG.
-
-      ![](img/promoted.jpg)
-
-      Now that we use automated and manual promotions. Maybe we can extend promoting images beyond DTR.
-
-## <a name="task7"></a>Task 7: Extend with Image Mirroring
-Docker Trusted Registry allows you to create mirroring policies for a repository. When an image gets pushed to a repository and meets a certain criteria, DTR automatically pushes it to repository in another DTR deployment or Docker Hub.
-
-This not only allows you to mirror images but also allows you to create image promotion pipelines that span multiple DTR deployments and datacenters. Let's set one up. How about we mirror an image to [hub.docker.com](https://hub.docker.com)?
-
-1. Go to [hub.docker.com](https://hub.docker.com) and create an login and repository.
-
-2. Navigate to `Repositories` --> `ci`/`dc18` --> `MIRRORS` --> `New mirror`.
-   Change the `REGISTRY TYPE` to `Docker Hub` and fill out the relevant information like:
-
-   ![](img/mirror.jpg)
-
-3. Click `Connect` and scroll down.
-4. Next create a `tag name` Trigger that is equal to `promoted`
-5. Leave the `%n` tag renaming the same.
-6. Click `Connect`.
-7. Click `Save & Apply`.
-
-      ![](img/mirror2.jpg)
-
-
-Since we already had an image that had the tag `promoted` we should see that the image was pushed to [hub.docker.com](https://hub.docker.com). In fact we can click on the [hub](https://hub.docker.com) repository name to see if the image push was successful.
-
-![](img/mirror3.jpg)
-
-## <a name="task8"></a>Task 8: Docker Content Trust / Image Signing
+##  Docker Content Trust / Image Signing
 Docker Content Trust/Notary provides a cryptographic signature for each image. The signature provides security so that the image requested is the image you get. Read [Notary's Architecture](https://docs.docker.com/notary/service_architecture/) to learn more about how Notary is secure. Since Docker EE is "Secure by Default," Docker Trusted Registry comes with the Notary server out of the box.
 
 We can create policy enforcement within Universal Control Plane (UCP) such that **ONLY** signed images from the `ci` team will be allowed to run. Since this workshop is about DTR and Secure Supply Chain we will skip that step.
@@ -442,10 +269,12 @@ Again please use the same password. It will simplify this part of the workshop.
 
 
 
-## <a name="task9"></a>Task 9: Automate with Jenkins
-In order to automate we need to deploy Jenkins. If you want I can point you to a few Docker Compose yamls. OR we have the easy way. The easy, aka script, deploys Jenkins quickly.
+## Automate with Jenkins
+In order to automate we need to deploy Jenkins. There are many ways to deploy Jenkins. Here is a simple way using Docker to create a TLS terminated Jenkins with Nginx and self signed certificates. The trick with easily adding Docker to Jenkins is to create a new container based off the Jenkins upstream image that simply added the binary. 
 
-### <a name="task9.1"></a>Task 9.1: Deploy Jenkins
+[https://github.com/clemenko/compose_files/tree/master/jenkins-nginx](https://github.com/clemenko/compose_files/tree/master/jenkins-nginx). 
+
+### Deploy Jenkins
 
 1.  Take a look at the script. Also notice the script will check variables, and then runs `docker run`.
 
@@ -498,7 +327,7 @@ In order to automate we need to deploy Jenkins. If you want I can point you to a
 
 
 
-### <a name="task9.2"></a>Task 9.2: Plumb Jenkins
+### Plumb Jenkins
 Now that we have Jenkins setup and running we can create our first "Item" or job.
 
 1. Click on `New item` in the upper left.
@@ -547,7 +376,7 @@ Now that we have Jenkins setup and running we can create our first "Item" or job
 8. Review the `ci`/`dc18` repository in DTR. You should now see a bunch of tags that have been promoted.
 	![](img/automated_supply.jpg)
 
-### <a name="task9.2"></a>Task 9.2: Webhooks
+### Webhooks
 Now that we have Jenkins setup we can extend with webhooks. In Jenkins speak a webhook is simply a build trigger. Let's configure one.
 
 1. Navigate to Jenkins and click on the project/item called `ci_dc18` and click on `Configure` on the left hand side.
@@ -562,5 +391,5 @@ Now that we have Jenkins setup we can extend with webhooks. In Jenkins speak a w
 
 
 
-## <a name="Conclusion"></a>Conclusion
+## Conclusion
 In this workshop we were able to start deploying the basics of an Automated Secure Supply Chain. Hopefully with this foundation you can build your own organizations Secure Supply Chain!
