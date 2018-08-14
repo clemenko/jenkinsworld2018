@@ -270,43 +270,43 @@ Again please use the same password. It will simplify this part of the workshop.
 
 
 ## Automate with Jenkins
-In order to automate we need to deploy Jenkins. There are many ways to deploy Jenkins. Here is a simple way using Docker to create a TLS terminated Jenkins with Nginx and self signed certificates. The trick with easily adding Docker to Jenkins is to create a new container based off the Jenkins upstream image that simply added the binary. 
+In order to automate we need to deploy Jenkins. There are many ways to deploy Jenkins. Here is a simple way using Docker to create a TLS terminated Jenkins with Nginx and self signed certificates. The trick with easily adding Docker to Jenkins is to create a new container based off the Jenkins upstream image that simply added the binary. Here is a [simple Dockerfile](https://github.com/clemenko/jenkinsworld2018/blob/master/jenkins-nginx/jenkins.Dockerfile).
 
-[https://github.com/clemenko/compose_files/tree/master/jenkins-nginx](https://github.com/clemenko/compose_files/tree/master/jenkins-nginx). 
+```
+FROM alpine as build
+RUN apk -U add docker
+
+FROM jenkins/jenkins:lts-alpine
+LABEL maintainer="clemenko@docker.com", \
+      org.label-schema.vcs-url="https://github.com/clemenko/jenkinsworld2018/", \
+      org.label-schema.docker.cmd="docker run -d -v /var/run/docker.sock:/var/run/docker.sock -v /jenkins/:/var/jenkins_home -v /jenkins/.ssh:/root/.ssh/ -p 8080:8080 -p 50000:50000 --name jenkins superjenkins"
+USER root
+RUN apk -U add libltdl && rm -rf /var/cache/apk/*
+COPY --from=build /usr/bin/docker /usr/bin/
+```
+
 
 ### Deploy Jenkins
 
-1.  Take a look at the script. Also notice the script will check variables, and then runs `docker run`.
+1. Let's use a script for deploying Jenkins as a container that will output the Jenkins initial password.
 
-	```
-	cat ./dc18_supply_chain/scripts/jenkins.sh
-	```
+   ```
+   #!/bin/bash
 
-2.  Then run unset Docker Content Trust and instal Jenkins.
+   jenkins_id=$(docker run -d -p 8080:8080 -v /var/run/docker.sock:/var/run/docker.sock clemenko/dc18:jenkins)
+   echo $jenkins_id > jenkins.id
 
-	```
-      export DOCKER_CONTENT_TRUST=0
-	./dc18_supply_chain/scripts/jenkins.sh
-	```
+   echo -n "  Waiting for Jenkins to start."
+   for i in {1..20}; do echo -n "."; sleep 1; done
+   echo ""
 
-3.  Pay attention to the url AND Jenkins password. It will look like :
-
-	```
-	[worker3] (local) root@10.20.0.25 ~/
-	$ dc18_supply_chain/scripts/jenkins.sh
-	=========================================================================================================
-
-	  Jenkins URL : http://ip172-18-0-20-bcelih5dffhg00b2thog.direct.ee-beta2.play-with-docker.com:8080
-
-	=========================================================================================================
-	  Waiting for Jenkins to start................
-	=========================================================================================================
-
-	  Jenkins Setup Password = d32eda1cf2464b818826fd82b4f7c2cb
-
-	=========================================================================================================
-	```
-
+   echo "========================================================================================================="
+   echo ""
+   echo "  Jenkins Setup Password = "$(docker exec $jenkins_id cat /var/jenkins_home/secrets/initialAdminPassword)
+   echo ""
+   echo "========================================================================================================="
+   ```
+ 
 4. Now navigate to `http://$DOCS_URL:8080` by clicking on the url in the terminal. Let's start the setup of Jenkins and enter the password. It may take a minute or two for the `Unlock Jenkins` page to load. Be patient.
 	![](img/jenkins_token.jpg)
 
