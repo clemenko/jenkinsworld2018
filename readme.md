@@ -270,7 +270,7 @@ Again please use the same password. It will simplify this part of the workshop.
 
 
 ## Automate with Jenkins
-In order to automate we need to deploy Jenkins. There are many ways to deploy Jenkins. Here is a simple way using Docker to create a TLS terminated Jenkins with Nginx and self signed certificates. The trick with easily adding Docker to Jenkins is to create a new container based off the Jenkins upstream image that simply added the binary. Here is a [simple Dockerfile](https://github.com/clemenko/jenkinsworld2018/blob/master/jenkins-nginx/jenkins.Dockerfile).
+In order to automate we need to deploy Jenkins. There are many ways to deploy Jenkins. Here is a simple way using Docker to deploy Jenkins. The trick with easily adding Docker to Jenkins is to create a new container based off the Jenkins upstream image that simply added the binary. Here is a [simple Dockerfile](https://github.com/clemenko/jenkinsworld2018/blob/master/jenkins-nginx/jenkins.Dockerfile).
 
 ```
 FROM alpine as build
@@ -284,11 +284,11 @@ USER root
 RUN apk -U add libltdl && rm -rf /var/cache/apk/*
 COPY --from=build /usr/bin/docker /usr/bin/
 ```
-
+At a high level we are going to Jenkins without any plugins. In your organization you will probably want to add the GIT and other plugins to extend the functionality. We can demonstrate everything with basic shell scripts. 
 
 ### Deploy Jenkins
 
-1. Let's use a script for deploying Jenkins as a container that will output the Jenkins initial password.
+1. Let's use a [script](https://github.com/clemenko/jenkinsworld2018/blob/master/scripts/jenkins.sh) for deploying Jenkins as a container that will output the Jenkins initial password.
 
    ```
    #!/bin/bash
@@ -307,7 +307,7 @@ COPY --from=build /usr/bin/docker /usr/bin/
    echo "========================================================================================================="
    ```
  
-4. Now navigate to `http://$DOCS_URL:8080` by clicking on the url in the terminal. Let's start the setup of Jenkins and enter the password. It may take a minute or two for the `Unlock Jenkins` page to load. Be patient.
+4. Now navigate to your host on port 8080. Let's start the setup of Jenkins and enter the password. It may take a minute or two for the `Unlock Jenkins` page to load. Be patient.
 	![](img/jenkins_token.jpg)
 
 5. Click `Select plugins to install`.
@@ -342,7 +342,7 @@ Now that we have Jenkins setup and running we can create our first "Item" or job
 4. You will now see a text box. Past the following build script into the text box.
 
 
-	**Please replace the <DTR_URL> with your URL! `echo $DTR_URL` <-- `worker3`**
+	**Please replace the <DTR_URL> with your URL!**
 
 	```
 	DTR_USERNAME=admin
