@@ -3,7 +3,7 @@
 Creating a Secure Supply Chain of images is vitally important. Every organization needs to weigh ALL options available and understand the security risks. Having so many options for images makes it difficult to pick the right ones. Ultimately every organization needs to know the provenance of all the images, even when trusting an upstream image from store.docker.com. Once the images are imported into the infrastructure, a vulnerability scan is vital. Docker Trusted Registry with Image Scanning gives insight into any vulnerabilities. Finally, everything needs to be automated with Jenkins to provide a succinct audit trail. 
 
 ## What You Will Learn
-This reference architecture describes the components that make up a Secure Supply Chain. Topics include using Git, Jenkins, and [the Docker Store](http://store.docker.com) to feed the supply chain. All the tools listed and demonstrated within this reference architecture can be replaced with alternatives. The Secure Supply Chain can be broken into three stages:
+This post describes the components that make up a Secure Supply Chain. Topics include using Git, Jenkins, and [the Docker Store](http://store.docker.com) to feed the supply chain. All the tools listed and demonstrated within this reference architecture can be replaced with alternatives. The Secure Supply Chain can be broken into three stages:
 
 - Stage 1 is a code repository.
 - Stage 2 is Continuous Integration.
@@ -85,14 +85,6 @@ Click `New access token`. Enter `api` into the description field and click `Crea
 
 It should look like `ee9d7ff2-6fd4-4a41-9971-789e06e0d5d5`. Click `Done`.
 
-Lets add it to the `worker3` environment. Replace `<TOKEN>` with the token from DTR.
-
-```
-#example
-#export DTR_TOKEN=ee9d7ff2-6fd4-4a41-9971-789e06e0d5d5
-export DTR_TOKEN=<TOKEN>
-```
-
 ## Create DTR Repository
 We now need to access Docker Trusted Registry to setup two repositories.
 
@@ -130,20 +122,15 @@ When we push an image to `ci`/`dc18_build` it will get scanned. Based on that sc
 ## Pull / Tag / Push Docker Image
 Lets pull, tag, and push a few images to YOUR DTR.
 
-In order to push and pull images to DTR we will need to take advantage of PWD's Console Access.
+On any linux system with Docker installed. 
 
-1. Navigate back to the PWD tab in your browser.
-2. Click on `worker3`.
-3. In the console we should already have a variable called `DTR_URL`. Lets check.
+1. In the console create a variable called `DTR_URL`. 
 
 	```
-	echo $DTR_URL
+	export DTR_URL=<URL FOR YOUR DTR>
 	```
 
-  If you are not sure please follow [Task 1.1: Set Up Environment Variables](#task1.1).
-
-
-4. Now we login to our DTR server using your `DTR_TOKEN` from [Task 3.3: Create Jenkins DTR Token](#task3.3).
+4. Now we login to our DTR server using your `DTR_TOKEN`.
 
 	```
 	docker login -u jenkins -p $DTR_TOKEN $DTR_URL
@@ -160,7 +147,7 @@ In order to push and pull images to DTR we will need to take advantage of PWD's 
 
   This command is pull a few images from [hub.docker.com](https://hub.docker.com).
 
-6. Now let's tag the image for our DTR instance. We will use the `URL` variable we set before.
+6. Now let's tag the image for our DTR instance. We will use the `DTR_URL` variable we set before.
 
 	```
 	docker tag clemenko/dc18:0.1 $DTR_URL/ci/dc18_build:0.1
@@ -236,7 +223,7 @@ Let's sign our first Docker image?
     export DOCKER_CONTENT_TRUST=1
     ```
 
-3. And push... It will ask you for a BUNCH of passwords. Do yourself a favor in this workshop and use `admin1234`. :D
+3. And push... It will ask you for a BUNCH of passwords. Do yourself a favor and use the same password as the login.
 
     ```
     docker push $DTR_URL/ci/dc18:signed
@@ -247,7 +234,7 @@ Let's sign our first Docker image?
 	```
 	[worker3] (local) root@10.20.0.32 ~/dc18_supply_chain
 	$ docker push $DTR_URL/ci/dc18:signed
-	The push refers to a repository [ip172-18-0-24-bcd8s0ddffhg00b2o320.direct.ee-beta2.play-with-docker.com/ci/dc18]
+	The push refers to a repository [dtr.dockr.life/ci/dc18]
 	cd7100a72410: Mounted from ci/dc18
 	signed: digest: sha256:8c03bb07a531c53ad7d0f6e7041b64d81f99c6e493cb39abba56d956b40eacbc size: 528
 	Signing and pushing trust metadata
@@ -259,15 +246,13 @@ Let's sign our first Docker image?
 	way to recover this key. You can find the key in your config directory.
 	Enter passphrase for new root key with ID baf4f85:
 	Repeat passphrase for new root key with ID baf4f85:
-	Enter passphrase for new repository key with ID 8688152 (ip172-18-0-24-bcd8s0ddffhg00b2o320.direct.ee-beta2.play-with-docker.com/ci/dc18):
-	Repeat passphrase for new repository key with ID 8688152 (ip172-18-0-24-bcd8s0ddffhg00b2o320.direct.ee-beta2.play-with-docker.com/ci/dc18):
-	Finished initializing "ip172-18-0-24-bcd8s0ddffhg00b2o320.direct.ee-beta2.play-with-docker.com/ci/dc18"
-	Successfully signed "ip172-18-0-24-bcd8s0ddffhg00b2o320.direct.ee-beta2.play-with-docker.com/ci/dc18":signed
+	Enter passphrase for new repository key with ID 8688152 (dtr.dockr.life/ci/dc18):
+	Repeat passphrase for new repository key with ID 8688152 (dtr.dockr.life/ci/dc18):
+	Finished initializing "dtr.dockr.life/ci/dc18"
+	Successfully signed "dtr.dockr.life/ci/dc18":signed
 	```
 
-Again please use the same password. It will simplify this part of the workshop.
-
-
+Again please use the same password. It will simplify this part.
 
 ## Automate with Jenkins
 In order to automate we need to deploy Jenkins. There are many ways to deploy Jenkins. Here is a simple way using Docker to deploy Jenkins. The trick with easily adding Docker to Jenkins is to create a new container based off the Jenkins upstream image that simply added the binary. Here is a [simple Dockerfile](https://github.com/clemenko/jenkinsworld2018/blob/master/jenkins-nginx/jenkins.Dockerfile).
@@ -385,11 +370,10 @@ Now that we have Jenkins setup we can extend with webhooks. In Jenkins speak a w
 2. Then scroll down to `Build Triggers`. Check the radio button for `Trigger builds remotely` and enter an Authentication Token of `dc18_rocks`.  Scroll down and click `Save`.
 	![](img/jenkins_triggers.jpg)
 
-3. Now in your browser goto YOUR `http://$DOCS_URL:8080/job/ci_dc18/build?token=dc18_rocks`
+3. Now in your browser goto YOUR `http://<JENKINS URL>:8080/job/ci_dc18/build?token=dc18_rocks`
 
-	It should look like: `http://ip172-18-0-6-bcg2h0npobfg00c4nrb0.direct.ee-beta2.play-with-docker.com:8080/job/ci_dc18/build?token=dc18_rocks`
-
+	It should look like: `http://<JENKINS URL>:8080/job/ci_dc18/build?token=dc18_rocks`
 
 
 ## Conclusion
-In this workshop we were able to start deploying the basics of an Automated Secure Supply Chain. Hopefully with this foundation you can build your own organizations Secure Supply Chain!
+In this post we were able to start to understand and deploy the basics of an Automated Secure Supply Chain. Hopefully with this foundation you can build your own organizations Automated Secure Supply Chain!
