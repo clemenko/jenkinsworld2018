@@ -1,9 +1,11 @@
 # Secure, Automated Software Supply Chain
 
-Creating a Secure Supply Chain of images is vitally important. Every organization needs to weigh ALL options available and understand the security risks. Having so many options for images makes it difficult to pick the right ones. Ultimately every organization needs to know the provenance of all the images, even when trusting an upstream image from store.docker.com. Once the images are imported into the infrastructure, a vulnerability scan is vital. Docker Trusted Registry with Image Scanning gives insight into any vulnerabilities. Finally, everything needs to be automated with Jenkins to provide a succinct audit trail. 
+Creating a Secure Supply Chain of images is vitally important. Every organization needs to weigh ALL options available and understand the security risks. Having so many options for images makes it difficult to pick the right ones. Ultimately every organization needs to know the provenance of all the images, even when trusting an upstream image from [store.docker.com](http://store.docker.com). Once the images are imported into the infrastructure, a vulnerability scan is vital. Docker Trusted Registry with Image Scanning gives insight into any vulnerabilities. Finally, everything needs to be automated with Jenkins to provide a succinct audit trail.
 
 ## What You Will Learn
-This post describes the components that make up a Secure Supply Chain. Topics include using Git, Jenkins, and [the Docker Store](http://store.docker.com) to feed the supply chain. All the tools listed and demonstrated within this reference architecture can be replaced with alternatives. The Secure Supply Chain can be broken into three stages:
+This post describes the components that make up a Secure Supply Chain. Topics include using Git, Jenkins, and [the Docker Store](http://store.docker.com) to feed the supply chain. All the tools listed and demonstrated within this reference architecture can be replaced with alternatives.
+
+The Secure Supply Chain can be broken into three stages:
 
 - Stage 1 is a code repository.
 - Stage 2 is Continuous Integration.
@@ -15,36 +17,37 @@ Even though there are many alternatives, this document focuses on one set:
 - Jenkins (Build Automation Stage 2)
 - Docker Trusted Registry (Scanning and Promotion Stage 3)
 
-One motto to remember for this reference architecture is "NO human will build or deploy code headed to production!"
+One motto to remember for this reference architecture is "NO human will build or deploy code to production!"
 
 ## Abbreviations
 The following abbreviations are used in this document:
 
-* UCP = Universal Control Plane
-* DTR = Docker Trusted Registry
-* DCT = Docker Content Trust
-* EE = Docker Enterprise Edition
-* CVE = Common Vulnerabilities and Exposures
+* UCP = [Universal Control Plane](https://docs.docker.com/ee/ucp/)
+* DTR = [Docker Trusted Registry](https://docs.docker.com/ee/dtr/)
+* DCT = [Docker Content Trust](https://docs.docker.com/engine/security/trust/content_trust/)
+* EE = [Docker Enterprise Edition](https://docs.docker.com/ee/)
+* CVE = [Common Vulnerabilities and Exposures](https://cve.mitre.org/)
+* PWD = [Play with Docker](https://ee-labs.play-with-docker.com)
 
 ## Why
-There are several good reasons why you need a **Secure Supply Chain**. Creating a **Secure Supply Chain** is theoretically mandatory for production. Non-production pipelines can also take advantage of having an automated base image. When thinking about Supply Chain, a couple of key phrases come to mind:
+There are several good reasons why you need a **Secure Supply Chain**. Creating a **Secure Supply Chain** is theoretically mandatory for production. Non-production pipelines can also take advantage of having an automated base image. When thinking about a Supply Chain, a couple of key phrases come to mind:
 
-* "NO human will build or deploy code headed to production!"
+* "NO human will build or deploy code to production!"
    * It helps prevent malicious code from being snuck into approved code. It also helps prevent insider threat.
 * "Everything needs an audit trail."
    * Being able to prove the what, when, why, and how questions makes everyone's job easier.
 * "Every supply chain needs a known good source."
    * Would you build a house in the middle of a swamp?
 
-Ideally you want the shortest path for images. You want to guarantee the success of the image making it through the chain. Limiting the steps is a great way to reduce the number of moving parts. 
+Ideally you want the shortest path for images. You want to guarantee the success of the image making it through the supply chain. Limiting the steps is a great way to reduce the number of moving parts.
 
 ## Before we Begin
-Before we begin we are going to assume you have already tried out [Docker Enterprise Edition - for Centos](https://store.docker.com/editions/enterprise/docker-ee-server-centos). More importantly you have setup [Docker Trusted Registry](https://docs.docker.com/ee/dtr/). Let's assume you have already set this up. 
+Before we begin we are going to assume you have already tried out [Docker Enterprise Edition - for Centos](https://store.docker.com/editions/enterprise/docker-ee-server-centos). More importantly you have setup [Docker Trusted Registry](https://docs.docker.com/ee/dtr/). Let's assume you have already set this up.
 
-## Create Jenkins User and Organization
-In order to setup our automation we need to create an organization and a user account for Jenkins. We are going to create a user named `jenkins` in the organization `ci`.
+## Create a Jenkins User and Organization
+In order to setup our automation we need to create an organization and user account for Jenkins. We are going to create a user named `jenkins` in the organization `ci`.
 
-### Create Jenkins Organization
+### Create a Jenkins Organization
 1. From the `PWD` main page click on `DTR`.
 
 ![](img/orgs_1.jpg)
@@ -93,20 +96,18 @@ We have an easy way with a script or the hard way by using the GUI.
 Either way we need to create two repositories, `dc18_build` and `dc18`. `dc18_build` will be used for the private version of the image. `dc18` will be the public version once an CVE scan is complete.
 
 1. Navigate to `Repositories` on the left menu and click `New repository`.
-2. Create that looks like `ci`/`dc18_build`. Make sure you click `Private`. Do not click `Create` yet!
-3. Click `Show advanced settings` and then click `On Push` under `SCAN ON PUSH`.  This will ensure that the CVE scan will start right after every push to this repository.  And turn on `IMMUTABILITY `. Then click `Create`.
+2. Create a repository that looks like `ci`/`dc18_build`. Make sure you click `Private`. **Do not click `Create` yet!**
+3. Click `Show advanced settings` and then click `On Push` under `SCAN ON PUSH`.  This will ensure that the CVE scan will start right after every push to this repository.  Turn on `IMMUTABILITY ` to ensure tags cannot be overwritten. Then click `Create`.
 
    ![](img/new_repo.jpg)
 
-4. Now let's create the second repository in a similar fashion. Create a `Public` repository as `admin`/`alpine` with `SCAN ON PUSH` set to `On Push`.
-
-5. Repeat this for creating the `ci`/`dc18` `Public` repository with `SCAN ON PUSH` set to `On Push`.
-6. We should have two repositories now.
+4. Repeat this for creating the `ci`/`dc18` repository with `VISIBILITY` set to `Public` and `SCAN ON PUSH` set to `On Push`.
+5. We should have two repositories now.
 
     ![](img/repo_list.jpg)
 
 ### Create Promotion Policy - Private to Public
-With the two repositories setup we can now define the promotion policy. The first policy we are going to create is for promoting an image that has passed a scan with zero (0) **Critical** vulnerabilities. The policy will target the `ci`/`dc_18` repository.
+With the two repositories setup we can now define the [promotion policy](https://docs.docker.com/ee/dtr/user/promotion-policies/). The first policy we are going to create is for promoting an image that has passed a scan with zero (0) **Critical** vulnerabilities. This policy will target the `ci`/`dc_18` private repository.
 
 1. Navigate to the `ci`/`dc18_build` repository. Click `Promotions` and click `New promotion policy`.
 
@@ -117,60 +118,60 @@ With the two repositories setup we can now define the promotion policy. The firs
 
   ![](img/promo_policy.jpg)
 
-When we push an image to `ci`/`dc18_build` it will get scanned. Based on that scan report we could see the image moved to `ci`/`dc18`. Lets push a few images to see if it worked.
+When we push an image to `ci`/`dc18_build` it will get scanned. Based on that scan result we could see the image moved to `ci`/`dc18`. Lets push a few images to see if it worked.
 
 ## Pull / Tag / Push Docker Image
 Lets pull, tag, and push a few images to YOUR DTR.
 
-On any linux system with Docker installed. 
+On any linux system with Docker installed.
 
-1. In the console create a variable called `DTR_URL`. 
+1. In the console create a variable called `DTR_URL`.
 
 	```
 	export DTR_URL=<URL FOR YOUR DTR>
 	```
 
-4. Now we login to our DTR server using your `DTR_TOKEN`.
+4. Now we can `docker login` to our DTR server using your `DTR_TOKEN`.
 
 	```
 	docker login -u jenkins -p $DTR_TOKEN $DTR_URL
 	```
 
-5. Now we can start pulling a few images.
+5. Now we can `docker image pull` a few images.
 
 	  ```
-	docker pull clemenko/dc18:0.1
-	docker pull clemenko/dc18:0.2
-	docker pull clemenko/dc18:0.3
-	docker pull alpine
+	docker image pull clemenko/dc18:0.1
+	docker image pull clemenko/dc18:0.2
+	docker image pull clemenko/dc18:0.3
+	docker image pull alpine
 	  ```
 
   This command is pull a few images from [hub.docker.com](https://hub.docker.com).
 
-6. Now let's tag the image for our DTR instance. We will use the `DTR_URL` variable we set before.
+6. Now let's `docker image tag` the image for our DTR instance. We will use the `DTR_URL` variable we set before.
 
 	```
-	docker tag clemenko/dc18:0.1 $DTR_URL/ci/dc18_build:0.1
-	docker tag clemenko/dc18:0.2 $DTR_URL/ci/dc18_build:0.2
-	docker tag clemenko/dc18:0.3 $DTR_URL/ci/dc18_build:0.3
-	docker tag alpine $DTR_URL/ci/dc18_build:alpine
+	docker image tag clemenko/dc18:0.1 $DTR_URL/ci/dc18_build:0.1
+	docker image tag clemenko/dc18:0.2 $DTR_URL/ci/dc18_build:0.2
+	docker image tag clemenko/dc18:0.3 $DTR_URL/ci/dc18_build:0.3
+	docker image tag alpine $DTR_URL/ci/dc18_build:alpine
 	 ```
 
-7. Now we can `docker push` the images to DTR.
+7. Now we can `docker image push` the images to DTR.
 
 	```
-	docker push $DTR_URL/ci/dc18_build:0.1
-	docker push $DTR_URL/ci/dc18_build:0.2
-	docker push $DTR_URL/ci/dc18_build:0.3
-	docker push $DTR_URL/ci/dc18_build:alpine
+	docker image push $DTR_URL/ci/dc18_build:0.1
+	docker image push $DTR_URL/ci/dc18_build:0.2
+	docker image push $DTR_URL/ci/dc18_build:0.3
+	docker image push $DTR_URL/ci/dc18_build:alpine
 	```
 
 ## Review Scan Results
-Lets take a good look at the scan results from the images. Please keep in mind this will take a few minutes to complete.
+Lets take a good look at the scan results from the images. **Please keep in mind this will take a few minutes to complete.**
 
 1. Navigate to DTR --> `Repostories` --> `ci/dc18_build` --> `Images`.
 
-	Do worry if you see images in a `Scanning...` or `Pending` state. Please click to another tab and click back.
+	Do not worry if you see images in a `Scanning...` or `Pending` state. Please click to another tab and click back.
 
     ![](img/image_list.jpg)
 
@@ -178,13 +179,15 @@ Lets take a good look at the scan results from the images. Please keep in mind t
 
      ![](img/image_list2.jpg)
 
-     Click `View details` for an image that has vulnerabilities. How about `0.2`? There are two views for the scanning results, **Layers** and **Components**. The **Layers** view shows which layer of the image had the vulnerable binary. This is extremely useful when diagnosing where the vulnerability is in the Dockerfile.
+     Click `View details` for an image that has vulnerabilities. How about `0.2`? There are two views for the scanning results, **Layers** and **Components**. The **Layers** view lists the layers of the image in order as they are built by the Dockerfile and shows which layer of the image had the vulnerable binary. This is extremely useful when diagnosing where the vulnerability is in the Dockerfile.
 
      ![](img/image_view.jpg)
 
-    The vulnerable binary is displayed, along with all the other contents of the layer, when you click the layer itself. In this example there are a few potentially vulnerable binaries:
+    The vulnerable binary(s) are displayed, along with all the other contents of the layer, when you click on a layer. In this example there are a few potentially vulnerable binaries - you can click on a component to switch to the **Component view** and get more details about the specific item:
 
     ![](img/image_comp.jpg)
+
+    The **Components view** lists the individual component libraries indexed by the scanning system, in order of severity and number of vulnerabilities found, most vulnerable first.
 
     Now we have a chance to review each vulnerability by clicking the CVE itself, example `CVE-2017-17522`. This will direct you to Mitre's site for CVEs.
 
@@ -193,7 +196,7 @@ Lets take a good look at the scan results from the images. Please keep in mind t
     Now that we know what is in the image. We should probably act upon it.
 
 ### Hide Vulnerabilities
-If we find that they CVE is a false positive. Meaning that it might be disputed, or from OS that you are not using. If this is the case we can simply `hide` the image. This will not remove the fact that the CVE was hidden.
+If we find that a CVE is a false positive, meaning that it might be disputed  or from an OS that you are not using. If this is the case we can simply `hide` the vulnerability for that image. This will not remove the fact that the CVE was hidden - if this vulnerability shows up in other images, it is still reported.
 
 Click `hide` for the two CVEs.
 	![](img/cve_hide.jpg)
@@ -214,7 +217,7 @@ Let's sign our first Docker image?
 1. Right now you should have a promoted image `$DTR_URL/ci/dc18:promoted`. We need to tag it with a new `signed` tag.
 
    ```
-   docker tag $DTR_URL/ci/dc18:promoted $DTR_URL/ci/dc18:signed
+   docker image tag $DTR_URL/ci/dc18:promoted $DTR_URL/ci/dc18:signed
    ```
 
 2. Now lets enable DCT.
@@ -226,14 +229,14 @@ Let's sign our first Docker image?
 3. And push... It will ask you for a BUNCH of passwords. Do yourself a favor and use the same password as the login.
 
     ```
-    docker push $DTR_URL/ci/dc18:signed
+    docker image push $DTR_URL/ci/dc18:signed
     ```
 
     Here is an example output:
 
 	```
 	[worker3] (local) root@10.20.0.32 ~/dc18_supply_chain
-	$ docker push $DTR_URL/ci/dc18:signed
+	$ docker image push $DTR_URL/ci/dc18:signed
 	The push refers to a repository [dtr.dockr.life/ci/dc18]
 	cd7100a72410: Mounted from ci/dc18
 	signed: digest: sha256:8c03bb07a531c53ad7d0f6e7041b64d81f99c6e493cb39abba56d956b40eacbc size: 528
@@ -255,7 +258,11 @@ Let's sign our first Docker image?
 Again please use the same password. It will simplify this part.
 
 ## Automate with Jenkins
-In order to automate we need to deploy Jenkins. There are many ways to deploy Jenkins. Here is a simple way using Docker to deploy Jenkins. The trick with easily adding Docker to Jenkins is to create a new container based off the Jenkins upstream image that simply added the binary. Here is a [simple Dockerfile](https://github.com/clemenko/jenkinsworld2018/blob/master/jenkins-nginx/jenkins.Dockerfile).
+In order to automate we need to deploy Jenkins. There are many ways to deploy Jenkins. Here is a simple way of using Docker to deploy Jenkins.
+
+### Build Jenkins with Docker installed
+
+We will need the docker client binary in our Jenkins container to issue the docker commands. Here is a [simple Dockerfile](https://github.com/clemenko/jenkinsworld2018/blob/master/jenkins-nginx/jenkins.Dockerfile) which will add the docker binary into our final Jenkins image:
 
 ```
 FROM alpine as build
@@ -269,7 +276,7 @@ USER root
 RUN apk -U add libltdl && rm -rf /var/cache/apk/*
 COPY --from=build /usr/bin/docker /usr/bin/
 ```
-At a high level we are going to Jenkins without any plugins. In your organization you will probably want to add the GIT and other plugins to extend the functionality. We can demonstrate everything with basic shell scripts. 
+At a high level we are going to use Jenkins without any plugins. In your organization you will probably want to add the `GIT` and other plugins to extend the functionality. We can demonstrate everything with basic shell scripts.
 
 ### Deploy Jenkins
 
@@ -291,14 +298,14 @@ At a high level we are going to Jenkins without any plugins. In your organizatio
    echo ""
    echo "========================================================================================================="
    ```
- 
-4. Now navigate to your host on port 8080. Let's start the setup of Jenkins and enter the password. It may take a minute or two for the `Unlock Jenkins` page to load. Be patient.
+
+4. From a browser navigate to your host on port 8080. Let's start the setup of Jenkins and enter the password. It may take a minute or two for the `Unlock Jenkins` page to load. Be patient.
 	![](img/jenkins_token.jpg)
 
 5. Click `Select plugins to install`.
 	![](img/jenkins_plugins1.jpg)
 
-6. We don't need to install ANY plugins. Click `none` at the top.
+6. We don't need to install **ANY** plugins. Click `none` at the top.
 	![](img/jenkins_none.jpg)
 
 7. Next Click `Continue as admin` in the lower right hand corner. We don't need to create another username for Jenkins.
@@ -326,7 +333,6 @@ Now that we have Jenkins setup and running we can create our first "Item" or job
 
 4. You will now see a text box. Past the following build script into the text box.
 
-
 	**Please replace the <DTR_URL> with your URL!**
 
 	```
@@ -335,19 +341,20 @@ Now that we have Jenkins setup and running we can create our first "Item" or job
 
 	docker login -u admin -p admin1234 $DTR_URL
 
-	docker pull clemenko/dc18:0.2
+	docker image pull clemenko/dc18:0.2
 
-	docker tag clemenko/dc18:0.2 $DTR_URL/ci/dc18_build:jenkins_$BUILD_NUMBER
+	docker image tag clemenko/dc18:0.2 $DTR_URL/ci/dc18_build:jenkins_$BUILD_NUMBER
 
-	docker push $DTR_URL/ci/dc18_build:jenkins_$BUILD_NUMBER
+	docker image push $DTR_URL/ci/dc18_build:jenkins_$BUILD_NUMBER
 
 	docker rmi clemenko/dc18:0.1 clemenko/dc18:0.2 $DTR_URL/ci/dc18_build:jenkins_$BUILD_NUMBER
 	```
 
-	It will look very similar to:
-	![](img/jenkins_build2.jpg)
+  It will look very similar to:
 
-	Now scroll down and click `Save`.
+  ![](img/jenkins_build2.jpg)
+
+  Now scroll down and click `Save`.
 
 5. Now let's run the build. Click `Build now`.
 	![](img/jenkins_buildnow.jpg)
@@ -362,7 +369,7 @@ Now that we have Jenkins setup and running we can create our first "Item" or job
 	![](img/automated_supply.jpg)
 
 ### Webhooks
-Now that we have Jenkins setup we can extend with webhooks. In Jenkins speak a webhook is simply a build trigger. Let's configure one.
+Now that we have Jenkins setup we can extend it with webhooks. In Jenkins speak a webhook is simply a build trigger. Let's configure one.
 
 1. Navigate to Jenkins and click on the project/item called `ci_dc18` and click on `Configure` on the left hand side.
 	![](img/jenkins_configure.jpg)
@@ -374,6 +381,7 @@ Now that we have Jenkins setup we can extend with webhooks. In Jenkins speak a w
 
 	It should look like: `http://<JENKINS URL>:8080/job/ci_dc18/build?token=dc18_rocks`
 
+The webhook can now be used in DTR to automatically trigger the Jenkins job when a specific notification is received - see [Manage webhooks](https://docs.docker.com/ee/dtr/user/create-and-manage-webhooks/)
 
 ## Conclusion
-In this post we were able to start to understand and deploy the basics of an Automated Secure Supply Chain. Hopefully with this foundation you can build your own organizations Automated Secure Supply Chain!
+In this post we were able to start to understand and deploy the basics of an Automated Secure Supply Chain. Hopefully with this foundation you can build your organizations Automated Secure Supply Chain!
