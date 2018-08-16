@@ -351,9 +351,10 @@ Now that we have Jenkins setup and running we can create our first "Item" or job
 	```
 
   It will look very similar to:
-	![](img/jenkins_build2.jpg)
 
-	Now scroll down and click `Save`.
+  ![](img/jenkins_build2.jpg)
+
+  Now scroll down and click `Save`.
 
 5. Now let's run the build. Click `Build now`.
 	![](img/jenkins_buildnow.jpg)
